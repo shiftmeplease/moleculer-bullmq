@@ -1,10 +1,10 @@
 # moleculer-bullmq
 
-[![Coverage Status](https://coveralls.io/repos/github/LuxChanLu/moleculer-bullmq/badge.svg?branch=master)](https://coveralls.io/github/LuxChanLu/moleculer-bullmq?branch=master)
+<!-- [![Coverage Status](https://coveralls.io/repos/github/LuxChanLu/moleculer-bullmq/badge.svg?branch=master)](https://coveralls.io/github/LuxChanLu/moleculer-bullmq?branch=master)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/24c78365441a4e5e99dde311cfa72f18)](https://www.codacy.com/app/LuxChanLu/moleculer-bullmq?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=LuxChanLu/moleculer-bullmq&amp;utm_campaign=Badge_Grade)
 [![Maintainability](https://api.codeclimate.com/v1/badges/e7d4fa4fbe1032b51c77/maintainability)](https://codeclimate.com/github/LuxChanLu/moleculer-bullmq/maintainability)
 ![Libraries.io dependency status for latest release](https://img.shields.io/librariesio/release/npm/moleculer-bullmq)
-[![Downloads](https://img.shields.io/npm/dm/moleculer-bullmq.svg)](https://www.npmjs.com/package/moleculer-bullmq)
+[![Downloads](https://img.shields.io/npm/dm/moleculer-bullmq.svg)](https://www.npmjs.com/package/moleculer-bullmq) -->
 
 ## How to create job
 You just need to add the `BullMqMixin` and add a `queue` attribute to you action.  
