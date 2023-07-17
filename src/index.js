@@ -1,123 +1,170 @@
-/*
- * moleculer-bullmq
- * Copyright (c) 2022 LuxChan S.A R.L.-S (https://github.com/LuxChanLu/moleculer-bullmq)
- * MIT Licensed
- */
+import { Worker, QueueEvents, Queue } from 'bullmq';
+// import { Queue3 as Queue } from "bullmq/dist/esm/classes/compat";
 
-'use strict'
-
-const { Worker, Queue, QueueEvents } = require('bullmq')
-
-module.exports = {
+export default {
   settings: {
     bullmq: {
-      worker: {}
-    }
+      worker: {},
+    },
   },
   hooks: {
     before: {
-      '*': '$populateJob'
-    }
+      '*': '$populateJob',
+    },
   },
   created() {
-    this.$queues = Object.entries(this.schema.actions || {}).filter(([, { queue }]) => queue).map(([name]) => name)
-    this.$queueResolved = {}
-    this.$connection = this.settings.bullmq.client ? this.settings.bullmq.client : this.broker.cacher.client.options
+    this.$queues = Object.entries(this.schema.actions || {})
+      .filter(([, { queue }]) => queue)
+      .map(([name]) => name);
+    this.$queueResolved = {};
+    if (this.settings.bullmq.client) {
+      this.$connection = this.settings.bullmq.client;
+    } else {
+      const { db, host, port } = this.broker.cacher.client.options;
+      this.$connection = { db, host, port };
+    }
   },
   started() {
     if (this.$queues.length > 0) {
-      this.$worker = new Worker(this.$queueName(), async job => {
-        const { params, meta, parentSpan } = job.data
-        meta.job = { id: job.id, queue: this.$queueName() }
-        return this.broker.call(`${this.$queueName()}.${job.name}`, params, { meta, timeout: 0, parentSpan })
-      }, { ...this.settings.bullmq.worker, connection: this.$connection })
-      this.$events = new QueueEvents(this.$queueName(), { connection: this.$connection })
-      this.$events.on('active', ({ jobId }) => this.$transformEvent(jobId, 'active'))
-      this.$events.on('removed', ({ jobId }) => this.$transformEvent(jobId, 'removed'))
-      this.$events.on('progress', ({ jobId, data }) => this.$transformEvent(jobId, 'progress', { progress: data }))
-      this.$events.on('failed', ({ jobId }) => this.$transformEvent(jobId, 'failed'))
-      this.$events.on('error', ({ jobId }) => this.$transformEvent(jobId, 'error'))
-      this.$events.on('completed', ({ jobId }) => this.$transformEvent(jobId, 'completed'))
-      this.$events.on('drained', () => this.$transformEvent('drained'))
-      this.$events.on('paused', () => this.$transformEvent('paused'))
-      this.$events.on('resumed', () => this.$transformEvent('resumed'))
-      this.$events.on('cleaned', (jobs, type) => this.$transformEvent(null, 'cleaned', { jobs: jobs.map(({ id }) => id), type }))
+      this.$worker = new Worker(
+        this.$queueName(),
+        async (job) => {
+          const { params, meta, parentSpan } = job.data;
+          meta.job = { id: job.id, queue: this.$queueName() };
+          return this.broker.call(`${this.$queueName()}.${job.name}`, params, {
+            meta,
+            timeout: 0,
+            parentSpan,
+          });
+        },
+        { ...this.settings.bullmq.worker, connection: this.$connection }
+      );
+      // this.$worker.on("error", console.log);
+      this.$events = new QueueEvents(this.$queueName(), {
+        connection: this.$connection,
+      });
+      this.$events.on('active', ({ jobId }) =>
+        this.$transformEvent(jobId, 'active')
+      );
+      this.$events.on('removed', ({ jobId }) =>
+        this.$transformEvent(jobId, 'removed')
+      );
+      this.$events.on('progress', ({ jobId, data }) =>
+        this.$transformEvent(jobId, 'progress', { progress: data })
+      );
+      this.$events.on('failed', ({ jobId }) =>
+        this.$transformEvent(jobId, 'failed')
+      );
+      this.$events.on('error', ({ jobId }) =>
+        this.$transformEvent(jobId, 'error')
+      );
+      this.$events.on('completed', ({ jobId }) =>
+        this.$transformEvent(jobId, 'completed')
+      );
+      this.$events.on('drained', () => this.$transformEvent('drained'));
+      this.$events.on('paused', () => this.$transformEvent('paused'));
+      this.$events.on('resumed', () => this.$transformEvent('resumed'));
+      this.$events.on('cleaned', (jobs, type) =>
+        this.$transformEvent(null, 'cleaned', {
+          jobs: jobs.map(({ id }) => id),
+          type,
+        })
+      );
     }
   },
   async stopped() {
     if (this.$worker) {
-      await this.$worker.close()
+      await this.$worker.close();
     }
     if (this.$events) {
-      await this.$events.close()
+      await this.$events.close();
     }
-    await Promise.all(Object.values(this.$queueResolved).map(queue => queue.close()))
+    await Promise.all(
+      Object.values(this.$queueResolved).map((queue) => queue.close())
+    );
   },
   methods: {
     $queueName() {
       if (this.version != null && !(this.settings || {}).$noVersionPrefix) {
-        return `v${this.version}.${this.name}`
+        return `v${this.version}.${this.name}`;
       }
-      return this.name
+      return this.name;
     },
     $resolve(name) {
       if (!this.$queueResolved[name]) {
-        this.$queueResolved[name] = new Queue(name, { connection: this.$connection })
+        this.$queueResolved[name] = new Queue(name, {
+          connection: this.$connection,
+        });
+        // this.$queueResolved[name].on("error", console.log);
       }
-      return this.$queueResolved[name]
+      return this.$queueResolved[name];
     },
     pause(name) {
       if (name) {
-        return this.$resolve(name).pause()
+        return this.$resolve(name).pause();
       } else if (this.$worker) {
-        return this.$worker.pause()
+        return this.$worker.pause();
       }
     },
     resume(name) {
       if (name) {
-        return this.$resolve(name).resume()
+        return this.$resolve(name).resume();
       } else if (this.$worker) {
-        return this.$worker.resume()
+        return this.$worker.resume();
       }
     },
     queue(ctx, name, action, params, options) {
-      return this.$resolve(name).add(action, {
-        params, meta: ctx.meta, parentSpan: {
-          id: ctx.parentID, traceID: ctx.requestID, sampled: ctx.tracing
-        }
-      }, options)
+      return this.$resolve(name).add(
+        action,
+        {
+          params,
+          meta: ctx.meta,
+          parentSpan: {
+            id: ctx.parentID,
+            traceID: ctx.requestID,
+            sampled: ctx.tracing,
+          },
+        },
+        options
+      );
     },
     localQueue(ctx, action, params, options) {
-      return this.queue(ctx, this.$queueName(), action, params, options)
+      return this.queue(ctx, this.$queueName(), action, params, options);
     },
     job(name, id) {
       if (arguments.length === 1) {
-        id = name
-        name = this.$queueName()
+        id = name;
+        name = this.$queueName();
       }
-      return this.$resolve(name).getJob(id)
+      return this.$resolve(name).getJob(id);
     },
     async $populateJob(ctx) {
-      ctx.locals.job = ctx.meta && ctx.meta.job ? await this.job(ctx.meta.job.queue, ctx.meta.job.id) : undefined
+      ctx.locals.job =
+        ctx.meta && ctx.meta.job
+          ? await this.job(ctx.meta.job.queue, ctx.meta.job.id)
+          : undefined;
     },
     async $transformEvent(id, type, params) {
-      const event = arguments.length === 1 ? [id] : [type]
-      let emitOpts = { meta: { job: { queue: this.$queueName() } } }
+      const event = arguments.length === 1 ? [id] : [type];
+      let emitOpts = { meta: { job: { queue: this.$queueName() } } };
       if (arguments.length >= 2 && id) {
-        const job = await this.job(id)
+        const job = await this.job(id);
         if (job && job.name) {
-          event.unshift(job.name)
-          const { meta, parentSpan } = job.data
-          meta.job = { id: job.id, queue: this.$queueName() }
-          emitOpts = { meta, parentSpan }
+          event.unshift(job.name);
+          const { meta, parentSpan } = job.data;
+          meta.job = { id: job.id, queue: this.$queueName() };
+          emitOpts = { meta, parentSpan };
         }
-        params = params || {}
-        params.id = id
+        params = params || {};
+        params.id = id;
       }
-      const name = event.join('.')
+      const name = event.join('.');
 
-      this.broker.emit(`${this.$queueName()}.${name}`, params, emitOpts)
-      this.broker.emit(name, params, this.$queueName(), { ...emitOpts, groups: this.$queueName() })
-    }
-  }
-}
+      this.broker.emit(`${this.$queueName()}.${name}`, params, emitOpts);
+      this.broker.emit(name, params, this.$queueName(), {
+        ...emitOpts,
+        groups: this.$queueName(),
+      });
+    },
+  },
+};
